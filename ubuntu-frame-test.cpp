@@ -13,6 +13,14 @@ using namespace testing;
 
 namespace
 {
+struct Process
+{
+    explicit Process(pid_t pid) : pid{pid} {}
+    ~Process() { kill(pid, SIGTERM); }
+
+    pid_t const pid;
+};
+
 struct UbuntuFrameTest : public testing::Test
 {
     UbuntuFrameTest();
@@ -70,6 +78,8 @@ UbuntuFrameTest::UbuntuFrameTest() :
 {
     if (display == nullptr)
         exit(1);
+
+    setenv("WAYLAND_DISPLAY", "wayland-97", 1);
 }
 
 UbuntuFrameTest::~UbuntuFrameTest()
@@ -90,14 +100,45 @@ void UbuntuFrameTest::TearDown()
     Test::TearDown();
 }
 
-TEST_F(UbuntuFrameTest, FrameStartsWithGreyscale)
+TEST_F(UbuntuFrameTest, AtStartFrameShowsGreyscale)
 {
     sleep(2);
     EXPECT_THAT(pixel_color(10, 10), Eq(0x0A0A0A));
 }
 
-TEST_F(UbuntuFrameTest, FrameShowsDiagnosticAfter5S)
+TEST_F(UbuntuFrameTest, After5SFrameShowsDiagnostic)
 {
+    sleep(7);
+    EXPECT_THAT(pixel_color(10, 10), Eq(0x060304));
+}
+
+TEST_F(UbuntuFrameTest, AfterAppStartsFrameShowsApp)
+{
+    sleep(2);
+    Process gedit{spawn("/usr/bin/gedit")};
+    sleep(2);
+    EXPECT_THAT(pixel_color(10, 10), Ne(0x0A0A0A));
+    EXPECT_THAT(pixel_color(10, 10), Ne(0x060304));
+}
+
+TEST_F(UbuntuFrameTest, AfterAppExitsFrameShowsGreyscale)
+{
+    sleep(2);
+    {
+        Process gedit{spawn("/usr/bin/gedit")};
+        sleep(2);
+    }
+    sleep(2);
+    EXPECT_THAT(pixel_color(10, 10), Eq(0x0A0A0A));
+}
+
+TEST_F(UbuntuFrameTest, AfterAppExitsAndTimeoutFrameShowsDiagnostic)
+{
+    sleep(2);
+    {
+        Process gedit{spawn("/usr/bin/gedit")};
+        sleep(2);
+    }
     sleep(7);
     EXPECT_THAT(pixel_color(10, 10), Eq(0x060304));
 }
